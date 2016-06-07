@@ -1,0 +1,295 @@
+
+HTML CODE :
+<html> 
+	<head> 
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script> 
+	<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyATcY-gTYFmBvMaWpR1Yv7j7207hfZz86U" 
+
+	async defer></script> 
+	<script type="text/javascript"> 
+	
+	/*PLEASE READ ! ------------> There is delay in updating the APIs of BART and I am unable to get real time train arrival times. If countdown timer needs to checked then go to getTime() function and there is variable named 'time'. Kindly change this variable to a time suitable to test the countdown (1 min ahead of current time should work good). Also, follow the bart time format i.e. "H:MM AM/PM" For example: "6:35 PM" */ 
+	var stationNames = []; 
+	var depIndex; 
+	var arrIndex; 
+	var stationAbbr = []; 
+	var stationLat = []; 
+	var stationLon = []; 
+	var flag=true; 
+	function getStationList(){ 
+	var x = new XMLHttpRequest(); 
+	x.open("GET", "http://api.bart.gov/api/stn.aspx?cmd=stns&key=MW9S-E7SL-26DU-VV8V", true); 
+	x.onreadystatechange = function () { 
+	if (x.readyState == 4 && x.status == 200){ 
+	var doc = x.responseXML; 
+	createDepStationList(doc); 
+	createArrStationList(doc); 
+	createStationDetails(doc); 
+	} 
+	}; 
+	x.send(null); 
+	}
+
+
+	function createDepStationList(doc){ 
+	var depSelect = document.getElementById("departure_stations"); 
+	for(var i=0; i<doc.childNodes[0].childNodes[1].childNodes.length; i++){ 
+	var s = doc.childNodes[0].childNodes[1].childNodes[i].childNodes[0].childNodes[0].textContent; 
+	var opt1 = document.createElement('option'); 
+	opt1.setAttribute("id", i); 
+	opt1.innerHTML = s; 
+	opt1.value = i; 
+	depSelect.appendChild(opt1); 
+	} 
+	} 
+	
+	function createArrStationList(doc){ 
+	var arrSelect = document.getElementById("arrival_stations"); 
+	for(var i=0; i<doc.childNodes[0].childNodes[1].childNodes.length; i++){ 
+	var s = doc.childNodes[0].childNodes[1].childNodes[i].childNodes[0].childNodes[0].textContent; 
+	var opt2 = document.createElement('option'); 
+	opt2.setAttribute("id", i); 
+	opt2.innerHTML = s; 
+	opt2.value = i; 
+	arrSelect.appendChild(opt2); 
+	} 
+	} 
+	
+	
+	function createStationDetails(doc){ 
+	for(var i=0; i<doc.childNodes[0].childNodes[1].childNodes.length; i++){ 
+	var s = doc.childNodes[0].childNodes[1].childNodes[i].childNodes[1].childNodes[0].textContent; 
+	stationAbbr.push(s.toString()); 
+	s = doc.childNodes[0].childNodes[1].childNodes[i].childNodes[2].childNodes[0].textContent; 
+	stationLat.push(s.toString()); 
+	s = doc.childNodes[0].childNodes[1].childNodes[i].childNodes[3].childNodes[0].textContent; 
+	stationLon.push(s.toString()); 
+	} 
+	} 
+	
+	
+	$(document).ready(function(){ 
+	$('#btn').on('click', function(){ 
+	calculateFares(); 
+	refresh(); 
+	return false; 
+	}); 
+	}); 
+	
+	function refresh(){ 
+	
+	setTimeout(function () { calculateFares(); }, 30000); 
+	} 
+
+
+	function calculateFares(){ 
+	var depSelect = document.getElementById("departure_stations"); 
+	var arrSelect = document.getElementById("arrival_stations"); 
+	depIndex = depSelect.options[depSelect.selectedIndex].value; 
+	arrIndex = arrSelect.options[arrSelect.selectedIndex].value; 
+	if(document.getElementById('fare_display')==null){ 
+	var para = document.createElement("p"); 
+	para.setAttribute("id", "fare_display"); 
+	} 
+	else 
+	var para = document.getElementById('fare_display'); 
+	displayFare(stationAbbr[depIndex], stationAbbr[arrIndex], para); 
+	var displayDiv = document.getElementById("display_data"); 
+	displayDiv.appendChild(para); 
+	calculateTime(); 
+	} 
+	
+	function displayFare(source, destination, para){ 
+	var trip; 
+	var xhttp = new XMLHttpRequest(); 
+	xhttp.open("GET", "http://api.bart.gov/api/sched.aspx?cmd=arrive&orig="+source+"&dest="+destination+"&key=MW9S-E7SL-26DU-VV8V", true); 
+	xhttp.send(); 
+	xhttp.onreadystatechange = function() { 
+	if (xhttp.readyState == 4 && xhttp.status == 200) { 
+	var doc = xhttp.responseXML; 
+	trip = doc.getElementsByTagName("trip"); 
+	var fare = trip[0].getAttribute('fare'); 
+	para.innerHTML="Estimated fare between "+stationAbbr[depIndex]+" and "+stationAbbr[arrIndex]+" is : $"+fare; 
+	} 
+	}; 
+	} 
+	
+	function calculateTime(){ 
+	var depSelect = document.getElementById("departure_stations"); 
+	var arrSelect = document.getElementById("arrival_stations"); 
+	depIndex = depSelect.options[depSelect.selectedIndex].value; 
+	arrIndex = arrSelect.options[arrSelect.selectedIndex].value; 
+	
+	if(document.getElementById('time_display1')==null){ 
+	var para1 = document.createElement("p"); 
+	para1.setAttribute("id", "time_display1"); 
+	var para2 = document.createElement("p"); 
+	para2.setAttribute("id", "time_display2") 
+	} 
+	else{ 
+	var para1 = document.getElementById('time_display1'); 
+	var para2 = document.getElementById('time_display2'); 
+	} 
+	displayTrainTimes(stationAbbr[depIndex], stationAbbr[arrIndex], para1, para2); 
+	var displayDiv = document.getElementById("display_data"); 
+	displayDiv.appendChild(para1); 
+	displayDiv.appendChild(para2); 
+	initMap(); 
+	} 
+	
+	function displayTrainTimes(source, destination, para1, para2){ 
+	var xhttp = new XMLHttpRequest(); 
+	xhttp.open("GET", "http://api.bart.gov/api/sched.aspx?cmd=arrive&orig="+source+"&dest="+destination+"&key=MW9S-E7SL-26DU-VV8V", true); 
+	xhttp.send(); 
+	xhttp.onreadystatechange = function() { 
+	if (xhttp.readyState == 4 && xhttp.status == 200) { 
+	var doc = xhttp.responseXML; 
+	trip = doc.getElementsByTagName("trip"); 
+	var time1 = trip[2].getAttribute('origTimeMin'); 
+	var time2 = trip[2].getAttribute('destTimeMin'); 
+	para1.innerHTML="Train shall arrive "+source+" at "+time1+"</div> and you shall reach "+destination+" at : "+time2; 
+	time1 = trip[3].getAttribute('origTimeMin'); 
+	time2 = trip[3].getAttribute('destTimeMin'); 
+	para2.innerHTML="Train shall arrive "+source+" at "+time1+" and you shall reach "+destination+" at : "+time2; 
+	} 
+	}; 
+	} 
+	
+	var directionsService; 
+	var directionsDisplay; 
+	var map; 
+	function initMap() { 
+	directionsService = new google.maps.DirectionsService; 
+	directionsDisplay = new google.maps.DirectionsRenderer; 
+	var position1 = new google.maps.LatLng(stationLat[depIndex], stationLon[depIndex]); 
+	var position2 = new google.maps.LatLng(stationLat[arrIndex], stationLon[arrIndex]); 
+	
+	var mapOptions = { 
+	zoom:7, 
+	center: position1 
+	} 
+	map = new google.maps.Map(document.getElementById("map"), mapOptions); 
+	var request = { 
+	origin:position1, 
+	destination:position2, 
+	travelMode: google.maps.TravelMode.TRANSIT 
+	}; 
+	directionsService.route(request, function(result, status) { 
+	if (status == google.maps.DirectionsStatus.OK) { 
+	directionsDisplay.setDirections(result); 
+	} 
+	}); 
+	directionsDisplay.setMap(map); 
+	displayCountdown(); 
+	} 
+	
+	var timeStr; 
+	var timeInSeconds; 
+	var difference; 
+	function getTime(source, destination){ 
+	var trip, time; 
+	var xhttp = new XMLHttpRequest(); 
+	xhttp.open("GET", "http://api.bart.gov/api/sched.aspx?cmd=arrive&orig="+source+"&dest="+destination+"&key=MW9S-E7SL-26DU-VV8V", true); 
+	xhttp.send(); 
+	xhttp.onreadystatechange = function() { 
+	if (xhttp.readyState == 4 && xhttp.status == 200) { 
+	doc=xhttp.responseXML; 
+	time = doc.childNodes[0].childNodes[4].childNodes[4].childNodes[2].getAttribute('origTimeMin'); 
+	//time = "6:34 PM"; 
+	timeStr = time.split(" "); 
+	if((timeStr[1])=="PM"){ 
+	var temp = timeStr[0].split(":"); 
+	timeInSeconds = (parseInt(temp[0])+12)*60*60+parseInt(temp[1])*60; 
+	}else{ 
+	var temp = timeStr[0].split(":"); 
+	timeInSeconds = (parseInt(temp[0]))*60*60+parseInt(temp[1])*60; 
+	} 
+	var currentDate = new Date(); 
+	currentTimeInSeconds = currentDate.getHours()*60*60+currentDate.getMinutes()*60+currentDate.getSeconds(); 
+	update(timeInSeconds, currentTimeInSeconds); 
+	} 
+	}; 
+	} 
+
+
+	function update(timeInSeconds, currentTimeInSeconds){ 
+	var interval = setInterval(function(){ 
+	var displayDiv = document.getElementById('display_data'); 
+	if(document.getElementById('timer')==null){ 
+	var para = document.createElement('p'); 
+	para.setAttribute('id', 'timer'); 
+	}else 
+	var para = document.getElementById('timer'); 
+	if(timeInSeconds>currentTimeInSeconds){ 
+	var difference = timeInSeconds - currentTimeInSeconds; 
+	var minutes = Math.floor(difference/60); 
+	var seconds = difference - minutes*60; 
+	para.innerHTML = "Next train shall arrive in "+minutes+" min and "+seconds+" seconds"; 
+	currentTimeInSeconds++; 
+	displayDiv.appendChild(para); 
+	}else{ 
+	para.innerHTML = "Train has arrived! Safe journey."; 
+	displayDiv.appendChild(para); 
+	} 
+	}, 1000); 
+	} 
+	
+	function displayCountdown(){ 
+	
+	getTime(stationAbbr[depIndex], stationAbbr[arrIndex]); 
+	
+	} 
+	
+	function displayHitCount(){ 
+	if (localStorage.pagecount){ 
+	localStorage.pagecount=Number(localStorage.pagecount) +1; 
+	} 
+	else{ 
+	localStorage.pagecount=1; 
+	} 
+	var h2 = document.getElementById('display_hits'); 
+	h2.innerHTML = "Welcome! Number of times you have visited this page is:"+localStorage.pagecount; 
+	} 
+	</script> 
+	<script type="text/javascript"> 
+	
+	</script> 
+	</head> 
+	<body onLoad="getStationList();displayHitCount();" style=""> 
+	<header style="background-color:#50EBEC;height: 10pc"> 
+	<h1 style="font-family: 'Hoefler Text', Georgia, 'Times New Roman', serif; 
+	font-weight: normal; 
+	font-size: 1.75em; 
+	letter-spacing: .2em; 
+	line-height: 1.1em; 
+	margin:0px; 
+	text-align: center; 
+	text-transform: uppercase;"> BART SERVICES</h1> 
+	</header> 
+	<section id="welcome"> 
+	<h2 id="display_hits"> </h2> 
+	</section> 
+	<section style=""> 
+	<select id="departure_stations" title="Select departing station"> 
+	
+	</select> 
+	<select id="arrival_stations" name="Select Arrival Station"> 
+	
+	</select> 
+	<form id="submit_form" action="" method="POST"> 
+	<button type="submit" id="btn">Search</button> 
+	</form> 
+	</section> 
+	
+	<aside id="display_data" style=""> 
+	
+	</aside> 
+	<div id="map" style="width:640px;height:640px;"> 
+	
+	</div> 
+	<footer> 
+	</footer> 
+	
+	</body> 
+	</html> 
+
